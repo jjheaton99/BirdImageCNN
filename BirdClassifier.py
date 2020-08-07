@@ -7,8 +7,6 @@ import os
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID" 
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
 """
-import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 
 import tensorflow as tf
@@ -52,7 +50,8 @@ test_gen = test_datagen.flow_from_directory(
 n_test = test_gen.n
 """
 #--------------------------------------------------
-
+#comment out when loading a model
+"""
 model = tf.keras.models.Sequential([
     Conv2D(32, (3, 3), activation='relu', input_shape=(224, 224, 3)),
     BatchNormalization(),
@@ -84,12 +83,14 @@ model = tf.keras.models.Sequential([
     Dropout(0.5),
     Dense(225)
     ])
-
-#model = tf.keras.models.load_model('',compile=False)
+"""
+#comment out when creating new model
+model = tf.keras.models.load_model('',compile=False)
 
 model.summary()
 
 #opt = tf.keras.optimizers.Adam(learning_rate=1e-2)
+#good value range found to be 0.005 - 0.0005
 opt = tf.keras.optimizers.SGD(learning_rate=0.005, momentum=0.9)
 
 model.compile(
@@ -116,18 +117,17 @@ model.evaluate(
     steps=VALID_STEP_SIZE,
     verbose=2)
 
-plt.subplot(1,2,1)
-plt.plot(history.history['loss'], label='loss')
-plt.plot(history.history['val_loss'], label='val_loss')
-plt.xlabel('Epoch')
-plt.ylabel('Loss')
-plt.legend(loc='upper right')
+(loss_ax, val_ax) = plt.subplots(2)
+loss_ax.plot(history.history['loss'], label='loss')
+loss_ax.plot(history.history['val_loss'], label='val_loss')
+loss_ax.xlabel('Epoch')
+loss_ax.ylabel('Loss')
+loss_ax.legend(loc='upper right')
 
-plt.subplot(1,2,2)
-plt.plot(history.history['accuracy'], label='accuracy')
-plt.plot(history.history['val_accuracy'], label='val_accuracy')
-plt.xlabel('Epoch')
-plt.ylabel('accuracy')
-plt.legend(loc='upper right')
+val_ax.plot(history.history['accuracy'], label='accuracy')
+val_ax.plot(history.history['val_accuracy'], label='val_accuracy')
+val_ax.xlabel('Epoch')
+val_ax.ylabel('accuracy')
+val_ax.legend(loc='upper right')
 
 plt.show()

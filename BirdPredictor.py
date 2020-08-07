@@ -49,12 +49,16 @@ results = pd.DataFrame({"Filename":filenames,
 results.to_csv("results.csv",index=False)
 #------------------------------------------------
 
+#outputs prediction for image file and associated confidence
 def predictImage(filename, model=model, labels=labels):
-    image = cv2.imread(filename)
+    image = cv2.imread(filename)/255.0
     #expand to 4D tensor so it fits the batch shape
     image = np.expand_dims(image, axis=0)
     
     prediction = model.predict(image, steps=1, verbose=1)
-    pred_class = np.argmax(prediction, axis=1)
-    return [labels[k] for k in pred_class]
+    pred_tensor = tf.constant(prediction)
+    probs = tf.keras.activations.softmax(pred_tensor).numpy()
+    pred_class = np.argmax(probs, axis=1)
+    return ([labels[k] for k in pred_class], probs[0][pred_class[0]])
     
+#print(predictImage('test_bird2.jpg'))
