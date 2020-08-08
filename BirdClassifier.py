@@ -7,12 +7,17 @@ import os
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID" 
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
 """
-import matplotlib.pyplot as plt
+import os
+os.environ["PATH"] += os.pathsep + 'C:/Users/jj_he/Anaconda3/envs/tensorflow/Library/bin/graphviz'
 
+import matplotlib.pyplot as plt
 import tensorflow as tf
+from tensorflow import keras
 from keras.preprocessing.image import ImageDataGenerator
-from keras.layers import Conv2D, MaxPooling2D, Dense, Dropout, BatchNormalization, GlobalAveragePooling2D
+from keras.layers import Conv2D, MaxPooling2D, Dense, Dropout, BatchNormalization, GlobalAveragePooling2D, concatenate
 from keras.callbacks import EarlyStopping, ModelCheckpoint
+from keras.utils.vis_utils import plot_model
+from keras.models import Model
 
 #--set up the generators--------------------------
 train_datagen = ImageDataGenerator(
@@ -50,7 +55,66 @@ test_gen = test_datagen.flow_from_directory(
 n_test = test_gen.n
 """
 #--------------------------------------------------
-#comment out when loading a model
+
+def convBlock(prev_output, filters=32, kernel_size=(3, 3), num_layers=1, max_pooling=False, pool_size=(2, 2)):
+    block = Conv2D(filters=filters, kernel_size=kernel_size, activation='relu')(prev_output)
+    block = BatchNormalization()(block)
+    if num_layers < 2 and max_pooling:
+        block = MaxPooling2D(pool_size=pool_size, padding='same')(block)
+    else:
+        for i in range(num_layers-1):
+            block = Conv2D(filters=filters, kernel_size=kernel_size, activation='relu')(block)
+            block = BatchNormalization()(block)
+        if max_pooling:
+            block = MaxPooling2D(pool_size=pool_size, padding='same')(block)
+    return block
+
+def denseBlock(prev_output, units=10, dropout_rate=0.5, num_layers=1):
+    block = Dense(units=units, activation='relu')(prev_output)
+    block = BatchNormalization()(block)
+    block = Dropout(rate=dropout_rate)(block)
+    if num_layers > 1:
+        for i in range(num_layers-1):
+                block = Dense(units=units, activation='relu')(block)
+                block = BatchNormalization()(block)
+                block = Dropout(rate=dropout_rate)(block)
+    return block
+
+def inceptionBlock(prev_output, filters=32):
+    block_1x1 = Conv2D(filters, (1, 1), padding='same', activation='relu')(prev_output)
+    block_1x1 = BatchNormalization()(block_1x1)
+    
+    block_3x3 = Conv2D(filters, (1, 1), padding='same', activation='relu')(prev_output)
+    block_3x3 = Conv2D(filters, (3, 3), padding='same', activation='relu')(block_3x3)
+    block_3x3 = BatchNormalization()(block_3x3)
+    
+    block_5x5 = Conv2D(filters, (1, 1), padding='same', activation='relu')(prev_output)
+    block_5x5 = Conv2D(filters, (5, 5), padding='same', activation='relu')(block_5x5)
+    block_5x5 = BatchNormalization()(block_5x5)
+    
+    block_pooling = MaxPooling2D(pool_size=(3, 3), strides=(1, 1), padding='same')(prev_output)
+    block_pooling = Conv2D(filters, (1, 1), padding='same', activation='relu')(block_pooling)
+    block_pooling = BatchNormalization()(block_pooling)
+    
+    return concatenate([block_1x1, block_3x3, block_5x5, block_pooling], axis=3)
+
+img_input = keras.Input(shape=(224, 224, 3))
+
+conv_block_1 = convBlock(img_input, filters=32, num_layers=2, max_pooling=True)
+
+inception_block_1 = inceptionBlock(conv_block_1, filters=32)
+inception_block_2 = inceptionBlock(inception_block_1, filters=64)
+inception_block_3 = inceptionBlock(inception_block_2, filters=128)
+
+conv_block_2 = convBlock(inception_block_3, filters=128, num_layers=2, max_pooling=True)
+conv_block_3 = convBlock(conv_block_2, filters=256, num_layers=2)
+
+global_average = GlobalAveragePooling2D()(conv_block_3)
+dense_block1 = denseBlock(global_average, units=2000, dropout_rate=0.5, num_layers=2)
+output = Dense(225)(dense_block1)
+
+model = Model(inputs=img_input, outputs=output)
+
 """
 model = tf.keras.models.Sequential([
     Conv2D(32, (3, 3), activation='relu', input_shape=(224, 224, 3)),
@@ -84,13 +148,13 @@ model = tf.keras.models.Sequential([
     Dense(225)
     ])
 """
-#comment out when creating new model
-model = tf.keras.models.load_model('',compile=False)
+#model = tf.keras.models.load_model('',compile=False)
 
 model.summary()
-
-#opt = tf.keras.optimizers.Adam(learning_rate=1e-2)
-#good value range found to be 0.005 - 0.0005
+plot_model(model, to_file='model.png', show_shapes=True)
+"""
+#opt = tf.keras.optimizers.Adam(learning_rate=0.001)
+#good learning rate range found to be 0.005 - 0.0005
 opt = tf.keras.optimizers.SGD(learning_rate=0.005, momentum=0.9)
 
 model.compile(
@@ -117,17 +181,20 @@ model.evaluate(
     steps=VALID_STEP_SIZE,
     verbose=2)
 
-(loss_ax, val_ax) = plt.subplots(2)
-loss_ax.plot(history.history['loss'], label='loss')
-loss_ax.plot(history.history['val_loss'], label='val_loss')
-loss_ax.xlabel('Epoch')
-loss_ax.ylabel('Loss')
-loss_ax.legend(loc='upper right')
+fig, axis = plt.subplots(2)
+fig.suptitle('Training losses and accuracies')
 
-val_ax.plot(history.history['accuracy'], label='accuracy')
-val_ax.plot(history.history['val_accuracy'], label='val_accuracy')
-val_ax.xlabel('Epoch')
-val_ax.ylabel('accuracy')
-val_ax.legend(loc='upper right')
+axis[0].plot(history.history['loss'], label='loss')
+axis[0].plot(history.history['val_loss'], label='val_loss')
+axis[0].xlabel('Epoch')
+axis[0].ylabel('Loss')
+axis[0].legend(loc='upper right')
+
+axis[1].plot(history.history['accuracy'], label='accuracy')
+axis[1].plot(history.history['val_accuracy'], label='val_accuracy')
+axis[1].xlabel('Epoch')
+axis[1].ylabel('accuracy')
+axis[1].legend(loc='upper right')
 
 plt.show()
+"""
