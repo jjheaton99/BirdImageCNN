@@ -61,4 +61,4 @@ def predictImage(filename, model=model, labels=labels):
     pred_class = np.argmax(probs, axis=1)
     return ([labels[k] for k in pred_class], probs[0][pred_class[0]])
     
-#print(predictImage('test_bird2.jpg'))
+print(predictImage('robin.jpg'))

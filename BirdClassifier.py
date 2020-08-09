@@ -23,6 +23,11 @@ from keras.models import Model
 
 #--set up the generators--------------------------
 train_datagen = ImageDataGenerator(
+    rotation_range=30,
+    width_shift_range=0.1,
+    height_shift_range=0.1,
+    shear_range=10.0,
+    zoom_range=0.1,
     vertical_flip=True,
     rescale=1.0/255)
 
@@ -58,7 +63,7 @@ n_test = test_gen.n
 """
 #--------------------------------------------------
 
-#old sequential model
+#old VGG style sequential model
 """
 model = tf.keras.models.Sequential([
     Conv2D(32, (3, 3), activation='relu', input_shape=(224, 224, 3)),
