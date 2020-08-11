@@ -20,6 +20,8 @@ from keras.layers import Conv2D, MaxPooling2D, Dense, Dropout, BatchNormalizatio
 from keras.callbacks import EarlyStopping, ModelCheckpoint, LearningRateScheduler, ReduceLROnPlateau
 from keras.utils.vis_utils import plot_model
 from keras.models import Model
+from kerastuner import HyperModel
+from kerastuner.tuners import Hyperband
 
 #--set up the generators--------------------------
 train_datagen = ImageDataGenerator(
@@ -28,7 +30,7 @@ train_datagen = ImageDataGenerator(
     height_shift_range=0.1,
     shear_range=10.0,
     zoom_range=0.1,
-    vertical_flip=True,
+    horizontal_flip=True,
     rescale=1.0/255)
 
 valid_datagen = ImageDataGenerator(rescale=1.0/255)
@@ -140,7 +142,98 @@ def inceptionBlock(prev_output, filters=32):
     
     return concatenate([block_1x1, block_3x3, block_5x5, block_pooling], axis=3)
 
-"""--model structure---------------------------------------------------------------------------------"""
+class InceptionHyperModel(HyperModel):
+    
+    def __init__(self, input_shape, num_classes):
+        self.input_shape = input_shape
+        self.num_classes = num_classes
+
+    def build(self, hp):
+        filters1_hp = hp.Int('filters1',
+                             min_value=32,
+                             max_value=128,
+                             step=32,
+                             default=32)
+        
+        filters2_hp = hp.Int('filters2',
+                             min_value=32,
+                             max_value=128,
+                             step=32,
+                             default=64)
+        
+        filters3_hp = hp.Int('filters3',
+                             min_value=32,
+                             max_value=128,
+                             step=32,
+                             default=128)
+        
+        dense_units_hp = hp.Int('dense_units',
+                                min_value=256,
+                                max_value=2048,
+                                step=256,
+                                default=512)
+        
+        dropout_rate_hp = hp.Float('dropout_rate',
+                                   min_value=0.0,
+                                   max_value=0.9,
+                                   step=0.1,
+                                   default=0.5)
+        
+        img_input = keras.Input(shape=self.input_shape)
+        
+        
+        conv_block_1 = convBlock(img_input, filters=filters1_hp, kernel_size=(7, 7), num_layers=1, max_pooling=True)
+        conv_block_2 = convBlock(conv_block_1, filters=filters1_hp, kernel_size=(1, 1), num_layers=1, padding='valid')
+        conv_block_3 = convBlock(conv_block_2, filters=filters1_hp, num_layers=2, max_pooling=True)
+        
+        inception_block_1 = inceptionBlock(conv_block_3, filters=filters2_hp)
+        inception_block_2 = inceptionBlock(inception_block_1, filters=filters2_hp)
+        inception_block_3 = inceptionBlock(inception_block_2, filters=filters2_hp)
+        
+        average_pool = AveragePooling2D(pool_size=(5, 5))(inception_block_3)
+        
+        conv_block_4 = convBlock(average_pool, filters=filters3_hp, kernel_size=(3, 3), num_layers=1)
+        
+        flatten = Flatten()(conv_block_4)
+        dense_block1 = denseBlock(flatten, units=dense_units_hp, dropout_rate=dropout_rate_hp, num_layers=2)
+        output = Dense(self.num_classes)(dense_block1)
+    
+        model = Model(inputs=img_input, outputs=output)
+        
+        model.compile(
+            optimizer=tf.keras.optimizers.Adam(
+                learning_rate=hp.Float(
+                    'learning_rate',
+                    min_value=1e-5,
+                    max_value=1e-2,
+                    sampling='LOG',
+                    default=1e-3
+                    )
+                ),
+            loss=tf.keras.losses.CategoricalCrossentropy(from_logits=True),
+            metrics='accuracy')
+        return model
+        
+def plotLossAccHistory(history):
+    fig, axis = plt.subplots(2)
+    fig.suptitle('Training losses and accuracies')
+    
+    axis[0].plot(history.history['loss'], label='loss')
+    axis[0].plot(history.history['val_loss'], label='val_loss')
+    axis[0].set_xlabel('Epoch')
+    axis[0].set_ylabel('Loss')
+    axis[0].legend(loc='upper right')
+    
+    axis[1].plot(history.history['accuracy'], label='accuracy')
+    axis[1].plot(history.history['val_accuracy'], label='val_accuracy')
+    axis[1].set_xlabel('Epoch')
+    axis[1].set_ylabel('accuracy')
+    axis[1].legend(loc='upper right')
+
+    plt.show()
+    
+"""  
+#--model structure---------------------------------------------------------------------------------
 img_input = keras.Input(shape=(224, 224, 3))
 
 conv_block_1 = convBlock(img_input, filters=32, kernel_size=(7, 7), num_layers=1, max_pooling=True)
@@ -158,10 +251,10 @@ conv_block_4 = convBlock(average_pool, filters=128, kernel_size=(3, 3), num_laye
 flatten = Flatten()(conv_block_4)
 dense_block1 = denseBlock(flatten, units=2000, dropout_rate=0.7, num_layers=2)
 output = Dense(225)(dense_block1)
-"""--------------------------------------------------------------------------------------------------"""
+#--------------------------------------------------------------------------------------------------
 
-model = Model(inputs=img_input, outputs=output)
-#model = tf.keras.models.load_model('',compile=False)
+#model = Model(inputs=img_input, outputs=output)
+model = tf.keras.models.load_model('',compile=False)
 
 model.summary()
 plot_model(model, to_file='model.png', show_shapes=True)
@@ -185,10 +278,10 @@ early_stop = EarlyStopping(monitor='val_loss', patience=20)
 model_save = ModelCheckpoint('', save_best_only=True)
 #learning_rate_schedule = LearningRateScheduler(decayLearningRate, verbose=1)
 learning_rate_schedule = ReduceLROnPlateau(monitor='val_loss',
-                                           factor=0.3,
+                                           factor=0.5,
                                            patience=10,
                                            verbose=1,
-                                           min_lr=1e-6)
+                                           min_lr=1e-5)
 
 TRAIN_STEP_SIZE = n_train//train_gen.batch_size
 VALID_STEP_SIZE = n_valid//valid_gen.batch_size
@@ -205,20 +298,63 @@ model.evaluate(
     valid_gen,
     steps=VALID_STEP_SIZE,
     verbose=2)
+"""
+INPUT_SHAPE = (224, 224, 3)
+NUM_CLASSES = 225
 
-fig, axis = plt.subplots(2)
-fig.suptitle('Training losses and accuracies')
+TRAIN_STEP_SIZE = n_train//train_gen.batch_size
+VALID_STEP_SIZE = n_valid//valid_gen.batch_size
 
-axis[0].plot(history.history['loss'], label='loss')
-axis[0].plot(history.history['val_loss'], label='val_loss')
-axis[0].set_xlabel('Epoch')
-axis[0].set_ylabel('Loss')
-axis[0].legend(loc='upper right')
+early_stop = EarlyStopping(monitor='val_loss', patience=20)
+model_save = ModelCheckpoint('', save_best_only=True)
+learning_rate_schedule = ReduceLROnPlateau(monitor='val_loss',
+                                           factor=0.5,
+                                           patience=10,
+                                           verbose=1,
+                                           min_lr=1e-5)
 
-axis[1].plot(history.history['accuracy'], label='accuracy')
-axis[1].plot(history.history['val_accuracy'], label='val_accuracy')
-axis[1].set_xlabel('Epoch')
-axis[1].set_ylabel('accuracy')
-axis[1].legend(loc='upper right')
+hypermodel = InceptionHyperModel(INPUT_SHAPE, NUM_CLASSES)
 
-plt.show()
+tuner = Hyperband(hypermodel,
+                  objective='val_accuracy',
+                  max_epochs=20,
+                  directory=os.path.normpath('C:/'),
+                  project_name='birds225')
+
+tuner.search(x=train_gen,
+             steps_per_epoch=TRAIN_STEP_SIZE,
+             epochs=20,
+             validation_data=valid_gen,
+             validation_steps=VALID_STEP_SIZE)
+
+tuner.results_summary()
+
+best_hps = tuner.get_best_hyperparameters()[0]
+
+print('Optimal hyperparameters:')
+print('learning rate: ', best_hps.get('learning_rate'))
+print('filters 1: ', best_hps.get('filters1'))
+print('filters 2: ', best_hps.get('filters2'))
+print('filters 3: ', best_hps.get('filters3'))
+print('dense units: ', best_hps.get('dense_units'))
+print('dropout rate: ', best_hps.get('dropout_rate'))
+
+model = tuner.hypermodel.build(best_hps)
+
+model.summary()
+plot_model(model, to_file='model.png', show_shapes=True)
+
+history = model.fit(
+          x=train_gen,
+          steps_per_epoch=TRAIN_STEP_SIZE,
+          epochs=1000,
+          callbacks=[early_stop, model_save, learning_rate_schedule],
+          validation_data=valid_gen,
+          validation_steps=VALID_STEP_SIZE)
+ 
+model.evaluate(
+    valid_gen,
+    steps=VALID_STEP_SIZE,
+    verbose=2)
+
+plotLossAccHistory(history)
