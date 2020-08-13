@@ -231,74 +231,7 @@ def plotLossAccHistory(history):
     axis[1].legend(loc='upper right')
 
     plt.show()
-    
-"""  
-#--model structure---------------------------------------------------------------------------------
-img_input = keras.Input(shape=(224, 224, 3))
 
-conv_block_1 = convBlock(img_input, filters=32, kernel_size=(7, 7), num_layers=1, max_pooling=True)
-conv_block_2 = convBlock(conv_block_1, filters=32, kernel_size=(1, 1), num_layers=1, padding='valid')
-conv_block_3 = convBlock(conv_block_2, filters=32, num_layers=2, max_pooling=True)
-
-inception_block_1 = inceptionBlock(conv_block_3, filters=64)
-inception_block_2 = inceptionBlock(inception_block_1, filters=64)
-inception_block_3 = inceptionBlock(inception_block_2, filters=64)
-
-average_pool = AveragePooling2D(pool_size=(5, 5))(inception_block_3)
-
-conv_block_4 = convBlock(average_pool, filters=128, kernel_size=(3, 3), num_layers=1)
-
-flatten = Flatten()(conv_block_4)
-dense_block1 = denseBlock(flatten, units=2000, dropout_rate=0.7, num_layers=2)
-output = Dense(225)(dense_block1)
-#--------------------------------------------------------------------------------------------------
-
-#model = Model(inputs=img_input, outputs=output)
-model = tf.keras.models.load_model('',compile=False)
-
-model.summary()
-plot_model(model, to_file='model.png', show_shapes=True)
-
-opt = tf.keras.optimizers.Adam(learning_rate=0.001)
-#opt = tf.keras.optimizers.SGD(learning_rate=0.001, momentum=0.9)
-
-def decayLearningRate(epoch, learning_rate):
-    decay = 0.9
-    steps_per_decay = 3
-    if epoch % steps_per_decay == 0:
-        return learning_rate * decay
-    return learning_rate
-
-model.compile(
-    optimizer=opt,
-    loss=tf.keras.losses.CategoricalCrossentropy(from_logits=True),
-    metrics='accuracy')
-
-early_stop = EarlyStopping(monitor='val_loss', patience=20)
-model_save = ModelCheckpoint('', save_best_only=True)
-#learning_rate_schedule = LearningRateScheduler(decayLearningRate, verbose=1)
-learning_rate_schedule = ReduceLROnPlateau(monitor='val_loss',
-                                           factor=0.5,
-                                           patience=10,
-                                           verbose=1,
-                                           min_lr=1e-5)
-
-TRAIN_STEP_SIZE = n_train//train_gen.batch_size
-VALID_STEP_SIZE = n_valid//valid_gen.batch_size
-
-history = model.fit(
-          x=train_gen,
-          steps_per_epoch=TRAIN_STEP_SIZE,
-          epochs=1000,
-          callbacks=[early_stop, model_save, learning_rate_schedule],
-          validation_data=valid_gen,
-          validation_steps=VALID_STEP_SIZE)
- 
-model.evaluate(
-    valid_gen,
-    steps=VALID_STEP_SIZE,
-    verbose=2)
-"""
 INPUT_SHAPE = (224, 224, 3)
 NUM_CLASSES = 225
 
@@ -341,6 +274,8 @@ print('dropout rate: ', best_hps.get('dropout_rate'))
 
 model = tuner.hypermodel.build(best_hps)
 
+#model = keras.models.load_model('')
+
 model.summary()
 plot_model(model, to_file='model.png', show_shapes=True)
 
@@ -348,6 +283,7 @@ history = model.fit(
           x=train_gen,
           steps_per_epoch=TRAIN_STEP_SIZE,
           epochs=1000,
+          verbose=2,
           callbacks=[early_stop, model_save, learning_rate_schedule],
           validation_data=valid_gen,
           validation_steps=VALID_STEP_SIZE)

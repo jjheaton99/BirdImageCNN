@@ -29,7 +29,7 @@ test_gen = test_datagen.flow_from_directory(
     shuffle=False)
 TEST_STEP_SIZE = test_gen.n//test_gen.batch_size
 
-model = tf.keras.models.load_model('',compile=True)
+model = tf.keras.models.load_model('', compile=True)
 
 model.evaluate(
     test_gen,
@@ -66,4 +66,4 @@ def predictImage(filename, model=model, labels=labels):
     pred_class = np.argmax(probs, axis=1)
     return ([labels[k] for k in pred_class], probs[0][pred_class[0]])
     
-print(predictImage('testbird.jpg'))
+print(predictImage('robin2.jpg'))

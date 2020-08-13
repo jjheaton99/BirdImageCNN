@@ -9,4 +9,6 @@ I have tried a sequential scaled down version of VGG-16. It achieved a validatio
 A model based off of google's Inception CNN architectures has achieved ~91% validation accuracy with the only image augmentation being random vertical flipping.
 This model has a faster training time than the VGG-16 style one, due to dimensionality reduction from the 1x1 kernel convolutions. I attempt to increase generalisation with more image augmentation in batch generation. The training time on my computer is increased by a factor of around 5, suggesting that the image augmentation itself is a bottleneck. With this extra augmentation the model achieved 93.8% validation and 95.6% test set accuracy.
 
+After tuning the Inception based model's hyperparameters with the Hyperband algorithm, it has 97.2% validation and and 98.2% test accuracy.
+
 In all cases, when experimenting with test set predictions, it appears that the models rely more on edge and shape features rather than colour.
